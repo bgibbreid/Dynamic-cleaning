@@ -1,0 +1,384 @@
+# Ben Gibb-Reid 27/02/2024
+#
+#
+# Aim of code: 
+#    To clean the data in the following ways:
+#    Stage 1: Remove any tokens where the first/last readings are below a threshold.
+#            I have used the 99th/1st percentile for this.
+#    Stage 2: For any readings in the middle that are outside of threshold, make into averages of the ones before/after it. 
+#            If the following/preceding readings are out, then remove the token.
+#    Stage 3: Any tokens with large jumps between measurements, fix by taking an average of the following/preceding readings. 
+#             If the following/preceding jumps are too large, then remove the token.
+
+
+# Packages
+
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(stringr)
+library(ExcelFunctionsR)
+
+Raw_data <- ##READ IN DATA###
+
+## Getting quantiles
+
+Raw_F1 <- data.frame(Raw_data[1:5], stack(Raw_data[6:14]))
+Raw_F2 <- data.frame(Raw_data[1:5], stack(Raw_data[15:23]))
+Raw_F3 <- data.frame(Raw_data[1:5], stack(Raw_data[24:32]))
+
+F1_quartile_1 <- quantile(Raw_F1$values, prob=c(0.01), na.rm=T)
+F1_quartile_99 <- quantile(Raw_F1$values, prob=c(0.99), na.rm=T)
+
+F1_int_q_range <- quantile(Raw_F1$values, prob=c(0.75), na.rm=T)-quantile(Raw_F1$values, prob=c(0.25), na.rm=T)
+
+F2_quartile_1 <- quantile(Raw_F2$values, prob=c(0.01), na.rm=T)
+F2_quartile_99 <- quantile(Raw_F2$values, prob=c(0.99), na.rm=T)
+
+F2_int_q_range <- quantile(Raw_F2$values, prob=c(0.75), na.rm=T)-quantile(Raw_F2$values, prob=c(0.25), na.rm=T)
+
+F3_quartile_1 <- quantile(Raw_F3$values, prob=c(0.01), na.rm=T)
+F3_quartile_99 <- quantile(Raw_F3$values, prob=c(0.99), na.rm=T)
+
+F3_int_q_range <- quantile(Raw_F3$values, prob=c(0.75), na.rm=T)-quantile(Raw_F3$values, prob=c(0.25), na.rm=T)
+#####
+
+
+### STAGE 1 Edge cleaning ####
+Raw_dataF1 <- Raw_data %>% filter(F110 >= F1_quartile_1)
+Raw_dataF1 <- Raw_dataF1 %>% filter(F110 <= F1_quartile_99)
+Raw_dataF1 <- Raw_dataF1 %>% filter(F190 >= F1_quartile_1)
+Raw_dataF1 <- Raw_dataF1 %>% filter(F190 <= F1_quartile_99)
+
+# check how many have been removed
+(length(Raw_data$file) - length(Raw_dataF1$file))
+(length(Raw_data$file) - length(Raw_dataF1$file)) / length(Raw_data$file) 
+
+Raw_dataF2 <- Raw_dataF1 %>% filter(F210 >= F2_quartile_1)
+Raw_dataF2 <- Raw_dataF2 %>% filter(F210 <= F2_quartile_99)
+Raw_dataF2 <- Raw_dataF2 %>% filter(F290 >= F2_quartile_1)
+Raw_dataF2 <- Raw_dataF2 %>% filter(F290 <= F2_quartile_99)
+
+# check how many have been removed
+(length(Raw_dataF1$file) - length(Raw_dataF2$file))
+(length(Raw_dataF1$file) - length(Raw_dataF2$file)) / length(Raw_dataF1$file) 
+
+Raw_dataF3 <- Raw_dataF2 %>% filter(F310 >= F3_quartile_1)
+Raw_dataF3 <- Raw_dataF3 %>% filter(F310 <= F3_quartile_99)
+Raw_dataF3 <- Raw_dataF3 %>% filter(F390 >= F3_quartile_1)
+Raw_dataF3 <- Raw_dataF3 %>% filter(F390 <= F3_quartile_99)
+
+# check how many have been removed
+(length(Raw_dataF2$file) - length(Raw_dataF3$file))
+(length(Raw_dataF2$file) - length(Raw_dataF3$file)) / (length(Raw_dataF2$file))
+
+S1_data <- Raw_dataF3
+# Check total removed
+length(Raw_data$file) - length(S1_data$file)
+(length(Raw_data$file) - length(S1_data$file)) / length(Raw_data$file) 
+
+
+### STAGE 2 Edge cleaning ####
+
+data <- S1_data
+S1_data <- select(data, (-X))
+
+#Getting quartiles again
+
+# Getting quartiles ####
+
+Raw_F1 <- data.frame(data[1:5], stack(data[6:14]))
+Raw_F2 <- data.frame(data[1:5], stack(data[15:23]))
+Raw_F3 <- data.frame(data[1:5], stack(data[24:32]))
+# Anything outside of the 1st and 99th quartile should be removed
+#Aim is to remove any tokens with a movement bigger than 1.5 of the interquartile range between two formants
+F1_quartile_1 <- quantile(Raw_F1$values, prob=c(0.01), na.rm=T)
+F1_quartile_99 <- quantile(Raw_F1$values, prob=c(0.99), na.rm=T)
+
+F1_int_q_range <- quantile(Raw_F1$values, prob=c(0.75), na.rm=T)-quantile(Raw_F1$values, prob=c(0.25), na.rm=T)
+
+F2_quartile_1 <- quantile(Raw_F2$values, prob=c(0.01), na.rm=T)
+F2_quartile_99 <- quantile(Raw_F2$values, prob=c(0.99), na.rm=T)
+
+F2_int_q_range <- quantile(Raw_F2$values, prob=c(0.75), na.rm=T)-quantile(Raw_F2$values, prob=c(0.25), na.rm=T)
+
+F3_quartile_1 <- quantile(Raw_F3$values, prob=c(0.01), na.rm=T)
+F3_quartile_99 <- quantile(Raw_F3$values, prob=c(0.99), na.rm=T)
+
+F3_int_q_range <- quantile(Raw_F3$values, prob=c(0.75), na.rm=T)-quantile(Raw_F3$values, prob=c(0.25), na.rm=T)
+#####
+
+#Start at column for each formant
+# Col 7 = F120  # 
+# Col 16 = F220 #
+# Col 25 = F320 #
+
+column_start <- 7
+column_end <- column_start+6
+
+formant <- "altf1"
+# Put the lower/upper filtering limits according with what you did for the edge cleaning
+lower <- F1_quartile_1
+upper <- F1_quartile_99
+
+# This now runs through the 6 middle measurements (2 to 8) and does the following:
+# Assess whether they are within the limits
+  # if they aren't, adjusts the column 
+for(j in column_start:column_end){
+  col_n <- j
+  measurement <- (j-column_start)+2
+  #The following loop makes the change and applies it to a new column
+  for (i in 1:nrow(data)){
+  adjusted_column <- mean(c(data[i, col_n-1], data[i, col_n+1]))
+  
+  col_name <- paste0(formant, measurement)
+  data[i, col_name] <- 0
+  
+  # Calculate the mean between the columns 
+  
+  # If the specific row is below the lower limit or above the upper limit
+  ifelse((data[i, col_n] <lower | data[i,col_n] >upper) 
+         # and the preceding column is within the limits 
+         & ((data[i, col_n-1] >=lower & data[i, col_n-1] <=upper)
+            # and the following column is within the limits 
+            & (data[i, col_n+1] >=lower & data[i, col_n+1] <=upper)),
+         # Fill the new column with the adjusted reading
+         (data[i, col_n] <- adjusted_column),
+         
+         #Conversely, if the value is outside of the limits and the preceding column is outside the limits 
+           ifelse(  (data[i, col_n] <lower | data[i,col_n] >upper) & 
+                      ((data[i, col_n-1] <lower | data[i, col_n-1] >upper) |
+                         # OR the following column is outside the limits 
+                         (data[i, col_n+1] <lower | data[i, col_n+1] >upper)),
+                    # Mark the row as one to remove
+                    data[i, col_name] <- "Remove", 
+                    data[i, col_name] <- "FINE"))
+  }
+}
+
+length(data[, col_name]) - length(which(data[, col_name]=="FINE" | data[, col_name]=="Remove"))
+
+length(which(data[, col_name]=="Remove"))
+
+colnames(data) <- make.names(colnames(data))
+
+cleaned_avg_edges <- data
+
+# Then, let's align the 'remove' decisions into one row
+cleaned_avg_edges$Remove <- ifelse(cleaned_avg_edges$altf12=="Remove" | cleaned_avg_edges$altf13=="Remove" |
+                                            cleaned_avg_edges$altf14=="Remove" | cleaned_avg_edges$altf15=="Remove" |
+                                            cleaned_avg_edges$altf16=="Remove" | cleaned_avg_edges$altf17=="Remove" |
+                                            cleaned_avg_edges$altf18=="Remove" |
+                                            cleaned_avg_edges$altf22=="Remove" | cleaned_avg_edges$altf23=="Remove" |
+                                            cleaned_avg_edges$altf24=="Remove" | cleaned_avg_edges$altf25=="Remove" |
+                                            cleaned_avg_edges$altf26=="Remove" | cleaned_avg_edges$altf27=="Remove" |
+                                            cleaned_avg_edges$altf28=="Remove" |
+                                            cleaned_avg_edges$altf32=="Remove" | cleaned_avg_edges$altf33=="Remove" |
+                                            cleaned_avg_edges$altf34=="Remove" | cleaned_avg_edges$altf35=="Remove" |
+                                            cleaned_avg_edges$altf36=="Remove" | cleaned_avg_edges$altf37=="Remove" |
+                                            cleaned_avg_edges$altf38=="Remove", "Remove", 0)
+
+
+sum(cleaned_avg_edges$Remove=="Remove")
+sum(cleaned_avg_edges$Remove==0)
+
+cleaned_avg_edges <- subset(cleaned_avg_edges, cleaned_avg_edges$Remove==0)
+
+# Mark how many have been changed
+cleaned_avg_edges <- cleaned_avg_edges %>% mutate(Stage2_Changes= if_else((altf12=="FINE" &
+                                                                                 altf13=="FINE" &
+                                                                                 altf14=="FINE" &
+                                                                                 altf15=="FINE" &
+                                                                                 altf16=="FINE" &
+                                                                                 altf17=="FINE" &
+                                                                                 altf18=="FINE" &
+                                                                                 altf22=="FINE" &
+                                                                                 altf23=="FINE" &
+                                                                                 altf24=="FINE" &
+                                                                                 altf25=="FINE" &
+                                                                                 altf26=="FINE" &
+                                                                                 altf27=="FINE" &
+                                                                                 altf28=="FINE" &
+                                                                                 altf32=="FINE" &
+                                                                                 altf33=="FINE" &
+                                                                                 altf34=="FINE" &
+                                                                                 altf35=="FINE" &
+                                                                                 altf36=="FINE" &
+                                                                                 altf37=="FINE"), "FINE", "CHANGED"))
+
+sum(cleaned_avg_edges$Stage2_Changes=="CHANGED")
+
+### STAGE 3 Jump cleaning ####
+
+cleaned_avg_edges <-select(cleaned_avg_edges, (-X))
+
+
+# Col 7 = F120 # 
+# Col 16 = F220 # 
+# Col 25 = F320 # 
+
+col_n=7
+
+threshold <- 150 # NEEDS CHANGING PER FORMANT
+new_col <- "altjumpF1" # NEEDS CHANGING PER FORMANT
+new_col2 <- paste0(new_col, "jump2")
+flat_col <- paste0(new_col, "flatcheck")
+
+nrows<- length(data$Token_code)
+maxjump <- paste0(new_col, "max")
+secondmaxjump <- paste0(new_col, "second_max")
+
+for (i in 1:nrow(data)){
+ 
+M1_minus_M2 <- (data[i, col_n-1] - data[i, col_n])
+M2_minus_M3 <- (data[i, col_n] - data[i, col_n+1])
+M3_minus_M4 <- (data[i, col_n+1] - data[i, col_n+2])
+M4_minus_M5 <- (data[i, col_n+2] - data[i, col_n+3])
+M5_minus_M6 <- (data[i, col_n+3] - data[i, col_n+4])
+M6_minus_M7 <- (data[i, col_n+4] - data[i, col_n+5])
+M7_minus_M8 <- (data[i, col_n+5] - data[i, col_n+6])
+M8_minus_M9 <- (data[i, col_n+6] - data[i, col_n+7])
+
+# By using abs() I can make this one object rather than 3!
+max <- max(abs(M1_minus_M2), abs(M2_minus_M3), abs(M3_minus_M4), abs(M4_minus_M5), abs(M5_minus_M6), 
+           abs(M6_minus_M7), abs(M7_minus_M8), abs(M8_minus_M9))
+
+# Now for second_max I use sort
+second_max <- sort(c(abs(M1_minus_M2), abs(M2_minus_M3), abs(M3_minus_M4), abs(M4_minus_M5), abs(M5_minus_M6), 
+                   abs(M6_minus_M7), abs(M7_minus_M8), abs(M8_minus_M9)))[7]
+
+data[i, maxjump] <- max
+data[i, secondmaxjump] <- second_max
+
+
+# Work out where the minimum or maximum distance is for each measurement
+Work_out_problem <- function(s) { if(s==abs(M1_minus_M2)) {
+  (2)
+  }else if (s==abs(M2_minus_M3)) {
+    (3) 
+    } else if(s==abs(M3_minus_M4)) {
+      (4) 
+    } else if(s==abs(M4_minus_M5)) {
+        (5)
+    } else if(s==abs(M5_minus_M6)) {
+          print(6)
+      } else if(s==abs(M6_minus_M7)) {
+            print(7)
+      } else if(s==abs(M7_minus_M8)) {
+              print(8)
+      } else if(s==abs(M8_minus_M9)) {
+                print(8)
+      } 
+}
+
+Work_out_secondproblem <- function(second_max) { if(second_max==abs(M1_minus_M2)) {
+  (2)
+}else if (second_max==abs(M2_minus_M3)) {
+  (3) 
+} else if(second_max==abs(M3_minus_M4)) {
+  (4) 
+} else if(second_max==abs(M4_minus_M5)) {
+  (5)
+} else if(second_max==abs(M5_minus_M6)) {
+  print(6)
+} else if(second_max==abs(M6_minus_M7)) {
+  print(7)
+} else if(second_max==abs(M7_minus_M8)) {
+  print(8)
+} else if(second_max==abs(M8_minus_M9)) {
+  print(8)
+} 
+}
+
+
+max_location <- Work_out_problem(max)
+max_location_left <- max_location-1
+max_location_right <- max_location+1
+
+second_max_location <- Work_out_secondproblem(second_max)
+second_max_location_left <- second_max_location-1
+second_max_location_right <- second_max_location+1
+
+Work_out_jump <- function(measurment_no) { if(measurment_no==2) {
+  print(abs(M1_minus_M2))
+  } else if (measurment_no==3) {
+  (abs(M2_minus_M3))
+  } else if (measurment_no==4) {
+    (abs(M3_minus_M4))
+  } else if (measurment_no==5) {
+    (abs(M4_minus_M5))
+  } else if (measurment_no==6) {
+    (abs(M5_minus_M6))
+  } else if (measurment_no==7) {
+    (abs(M6_minus_M7))
+  } else if (measurment_no==8) {
+    (abs(M7_minus_M8))
+  }
+}
+
+adjusted_column <- mean(c(data[i, col_n-1+max_location-2], data[i, col_n+1+max_location-2]))
+second_adjusted_column <- mean(c(data[i, col_n-1+second_max_location-2], data[i, col_n+1+second_max_location-2]))
+#data[i, col_n+max_location-2]
+#data[i, col_n+second_max_location-2]
+# OLD working out second max all_jumps <- c(abs(M1_minus_M2), abs(M2_minus_M3), abs(M3_minus_M4), abs(M4_minus_M5), abs(M5_minus_M6), 
+#               abs(M6_minus_M7), abs(M7_minus_M8), abs(M8_minus_M9))
+#n <- length(all_jumps)
+#second_max <- sort(all_jumps,partial=n-1)[n-1]
+
+# Here's the mad thing weaving it together!
+ifelse(max>threshold,                                              # If we are over the threshold
+       ifelse(max_location==2,                                       # Where the mmt.no is 2
+              ifelse(Work_out_jump(max_location_right)>threshold,       # and the following jump is over the threshold
+                     data[i, new_col] <-"Remove",                       # tell me to remove it
+                     data[i, col_n+max_location-2] <- adjusted_column), # Otherwise change it
+              ifelse(max_location==8,                               # Where the measurement is 8
+                     ifelse(Work_out_jump(max_location_left)>threshold,  # and the PRECEDING jump is over the threshold
+                data[i, new_col] <-"Remove",                               # tell me to remove it
+                data[i, col_n+max_location-2] <- adjusted_column),        # Otherwise change it
+                ifelse(Work_out_jump(max_location_left)>threshold || Work_out_jump(max_location_right)>threshold, 
+                       # Otherwise, if either the following OR preceding jump is ALSO out of threshold
+                       data[i, new_col] <-"Remove",  # Then remove it
+                       data[i, col_n+max_location-2] <- adjusted_column))),  # If the measurement's out but preceding ones aren't, change it
+       data[i, new_col] <-"FINE")   # If no jumps are out of threshold, tell me it's fine
+
+
+ifelse(second_max>threshold,                                              # If we are over the threshold
+       ifelse(max_location==2,                                       # Where the mmt.no is 2
+              ifelse(Work_out_jump(max_location_right)>threshold,       # and the following jump is over the threshold
+                     data[i, new_col2] <-"Remove",                       # tell me to remove it
+                     data[i, col_n+max_location-2] <- second_adjusted_column), # Otherwise change it
+              ifelse(max_location==8,                               # Where the measurement is 8
+                     ifelse(Work_out_jump(max_location_left)>threshold,  # and the PRECEDING jump is over the threshold
+                            data[i, new_col2] <-"Remove",                               # tell me to remove it
+                            data[i, col_n+max_location-2] <- second_adjusted_column),        # Otherwise change it
+                     ifelse(Work_out_jump(max_location_left)>threshold || Work_out_jump(max_location_right)>threshold, 
+                            # Otherwise, if either the following OR preceding jump is ALSO out of threshold
+                            data[i, new_col2] <-"Remove",  # Then remove it
+                            data[i, col_n+max_location-2] <- second_adjusted_column))),  # If the measurement's out but preceding ones aren't, change it
+       data[i, new_col2] <-"FINE")   # If no jumps are out of threshold, tell me it's fine
+
+ifelse(max==0,  # If there is no movement across the trajectory
+       data[i, flat_col] <- "FLAT",   # Mark it as being FLAT
+       data[i, flat_col] <- "FINE")   # Otherwise mark it as fine
+}
+
+###### END OF LOOP ####
+
+data <- data %>% replace(is.na(.), 0)
+
+data_filtered <- subset(data, altjumpF1!="Remove")
+data_filtered <- subset(data_filtered, altjumpF1jump2!="Remove")
+data_filtered <- subset(data_filtered , altjumpF2!="Remove")
+data_filtered <- subset(data_filtered , altjumpF2jump2!="Remove")
+data_filtered <- subset(data_filtered , altjumpF3!="Remove")
+data_filtered <- subset(data_filtered , altjumpF3jump2!="Remove")
+
+data_filtered <- subset(data_filtered , altjumpF1flatcheck!="FLAT")
+
+length(unique(data$Token_code)) - length(unique(data_filtered$Token_code)) 
+
+length(unique(data_filtered$Token_code))
+
+jump_cleaned_data <- data_filtered
+
+#Save output
