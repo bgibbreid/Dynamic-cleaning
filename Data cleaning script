@@ -380,5 +380,60 @@ length(unique(data$Token_code)) - length(unique(data_filtered$Token_code))
 length(unique(data_filtered$Token_code))
 
 jump_cleaned_data <- data_filtered
+                                 
+#### STAGE 4.5 Re-check the jumps ####
+# Col 7 = F120 # 
+# Col 16 = F220 # 
+# Col 25 = F320 # 
+                                 
+data_S5 <- jump_cleaned_data
 
-#Save output
+data_S5 <-  select(data_S5, -(X))
+
+col_n=25
+
+threshold <- 150
+new_colS5 <- "JumprecheckF1" # Needs changing every run
+new_col_max <- paste0(new_colS5, "MAX")
+                                 
+
+for (i in 1:nrow(data_S5)){
+  
+  M1_minus_M2 <- (data_S5[i, col_n-1] - data_S5[i, col_n])
+  M2_minus_M3 <- (data_S5[i, col_n] - data_S5[i, col_n+1])
+  M3_minus_M4 <- (data_S5[i, col_n+1] - data_S5[i, col_n+2])
+  M4_minus_M5 <- (data_S5[i, col_n+2] - data_S5[i, col_n+3])
+  M5_minus_M6 <- (data_S5[i, col_n+3] - data_S5[i, col_n+4])
+  M6_minus_M7 <- (data_S5[i, col_n+4] - data_S5[i, col_n+5])
+  M7_minus_M8 <- (data_S5[i, col_n+5] - data_S5[i, col_n+6])
+  M8_minus_M9 <- (data_S5[i, col_n+6] - data_S5[i, col_n+7])
+  
+  max <- max(abs(M1_minus_M2), abs(M2_minus_M3), abs(M3_minus_M4), abs(M4_minus_M5), abs(M5_minus_M6), 
+             abs(M6_minus_M7), abs(M7_minus_M8), abs(M8_minus_M9))
+  
+  data_S5[i, new_col_max] <- max
+  
+  if(max>=threshold) {
+    data_S5[i, new_colS5] <- "Remove"
+  } else  {
+    data_S5[i, new_colS5] <- "FINE"
+  } 
+}
+
+# Run three times, once for each formant
+
+data_S5_filter <- filter(data_S5, JumprecheckF1!="Remove" & JumprecheckF2!="Remove" & JumprecheckF3!="Remove")                                
+
+# How many tokens have been removed?
+count(data_S5_filter) - count(data_S5
+                                 
+
+                                 
+## Save output
+write.csv()                              
+
+                                 
+
+
+
+                                 
